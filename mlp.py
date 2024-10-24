@@ -1,180 +1,119 @@
-import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.model_selection import train_test_split
-from tqdm import tqdm
-
-# set numpy random seed
-np.random.seed(42)
 
 
-def f(x):
-    return np.sin(2 * np.pi * x[0] + 0.5 * x[1]) + 0.5 * x[1]
+class LCG:
+    def __init__(self, seed=42):
+        self.a = 1664525
+        self.c = 1013904223
+        self.m = 2 ** 32
+        self.state = seed
+
+    def next(self):
+        self.state = (self.a * self.state + self.c) % self.m
+        return self.state
+
+    def random(self):
+        return self.next() / self.m
 
 
-def f1(x):
-    function1 = (x[0] - 0.25) ** 2 + (x[1] - 0.25) ** 2
-    function2 = (x[0] - 0.75) ** 2 + (x[1] - 0.75) ** 2
-    return function1, function2
-
-
-def plot(function=f):
-    # add 5% noise to the function
-    samples = 1000
-    X = np.random.rand(samples, 2)
-    Y = function(X.T) + 0.05 * np.random.randn(samples)
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(X[:, 0], X[:, 1], Y, c=Y, cmap='viridis')
-    plt.show()
-
-
-def get_data(function: str = f):
-    if function == "f1":
-        samples = 1250
-        X = np.random.rand(samples, 2)
-        Y1, Y2 = f1(X.T)
-
-        func1, func2 = f1(X)
-        # get all the values of the function where value of function is < 0.2**2
-        indices = np.where(Y1 < 0.2 ** 2)
-        indices2 = np.where(Y2 < 0.2 ** 2)
-        Y1[indices] = 1
-        Y2[indices2] = 2
-        Y = np.where(Y1 == 1, 1, np.where(Y2 == 2, 2, 0))
-        return train_test_split(X, Y, test_size=0.2)
-
-    elif function == "csv":
-        import pandas as pd
-        df = pd.read_csv("cens")
-
-
-    samples = 1000
-    X = np.random.rand(samples, 2)
-    Y = f1(X.T) + 0.05 * np.random.randn(samples)
-    return train_test_split(X, Y, test_size=0.2)
-
-
-class MultiLayerPerceptron:
-    def __init__(self, layers: list):
+class MLP:
+    def __init__(self, layers, learning_rate=0.01, seed=42):
         self.layers = layers
-        self.weights = [np.random.randn(layers[i], layers[i + 1]) for i in range(len(layers) - 1)]
-        self.biases = [np.random.randn(layers[i]) for i in range(1, len(layers))]
-        self.activations = [np.zeros(layer) for layer in layers]
+        self.learning_rate = learning_rate
+        self.lcg = LCG(seed)
+        self.weights = []
+        self.biases = []
+        self.initialize_parameters()
 
-    def _sig(self, x):
+    def initialize_parameters(self):
+        for i in range(len(self.layers) - 1):
+            weight_matrix = np.zeros((self.layers[i], self.layers[i + 1]))
+            bias_vector = np.zeros((1, self.layers[i + 1]))
+            limit = np.sqrt(1 / self.layers[i])
+            for j in range(self.layers[i]):
+                for k in range(self.layers[i + 1]):
+                    weight_matrix[j][k] = (self.lcg.random() * 2 - 1) * limit
+            self.weights.append(weight_matrix)
+            self.biases.append(bias_vector)
+
+    def sigmoid(self, x):
         return 1 / (1 + np.exp(-x))
 
+    def sigmoid_derivative(self, x):
+        return x * (1 - x)
+
+    def binary_cross_entropy(self, y_true, y_pred):
+        epsilon = 1e-8
+        y_pred = np.clip(y_pred, epsilon, 1 - epsilon)
+        return - (y_true * np.log(y_pred) + (1 - y_true) * np.log(1 - y_pred))
+
+    def binary_cross_entropy_derivative(self, y_true, y_pred):
+        epsilon = 1e-8
+        y_pred = np.clip(y_pred, epsilon, 1 - epsilon)
+        return (y_pred - y_true) / (y_pred * (1 - y_pred))
+
     def forward(self, X):
-        self.activations[0] = X
-        for i in range(len(self.weights) - 1):
-            self.activations[i + 1] = self._sig(np.dot(self.activations[i], self.weights[i]) + self.biases[i])
-        self.activations[-1] = np.dot(self.activations[-2], self.weights[-1]) + self.biases[-1]
-        return self.activations[-1]
+        activations = [X]
+        for w, b in zip(self.weights, self.biases):
+            z = np.dot(activations[-1], w) + b
+            a = self.sigmoid(z)
+            activations.append(a)
+        return activations
 
-    def error(self, X, Y):
-        return np.mean((self.forward(X) - Y) ** 2)
+    def train(self, X, y, epochs):
+        log_interval = epochs // 10 if epochs >= 10 else 1
+        for epoch in range(1, epochs + 1):
+            activations = self.forward(X)
+            loss = np.mean(self.binary_cross_entropy(y, activations[-1]))
 
-    def backprop(self, X, Y):
-        """
-        Backpropagation algorithm with stochastic gradient descent (incremental learning).
-        :param X: Inputs
-        :param Y: Outputs
-        :return:
-        """
-        lr = 0.01
-        max_iter = 200
-        vareps = 1e-6
-        error_hist = []
-        for _ in (range(max_iter)):
-            for i in range(len(X)):
-                # draw random sample
-                x = X[i]
-                y = Y[i]
-                self.forward(x)
-                # Compute the error
-                error = y - self.activations[-1]
-                # Compute the gradient
-                gradient = [error * self.activations[-1] * (1 - self.activations[-1])]
-                # gradient for the last layer with linear activation function
-                gradient.append(error)
-                for j in range(len(self.weights) - 2, -1, -1):
-                    gradient.append(np.dot(self.weights[j + 1], gradient[-1]) * self.activations[j + 1] * (
-                            1 - self.activations[j + 1]))
-                gradient = gradient[::-1]  # reverse the list
-                # Update the weights
-                weights_updates = []
-                biases_updates = []
-                for j in range(len(self.weights)):
-                    weights_updates.append(lr * self.activations[j].reshape(-1, 1) * gradient[j])
-                    biases_updates.append(lr * gradient[j])
-                for j in range(len(self.weights)):
-                    self.weights[j] += weights_updates[j]
-                    self.biases[j] += biases_updates[j]
+            # Backpropagation
+            error = self.binary_cross_entropy_derivative(y, activations[-1])
+            delta = error * self.sigmoid_derivative(activations[-1])
 
-            error_hist.append(self.error(x, y))
-            if _ % 100 == 0:
-                print(f"Iteration: {_}, Error: {self.error(x, y)}")
-            if self.error(x, y) < vareps:
-                print(f"Converged after {_} iterations with error {self.error(x, y)}")
-                break
+            for l in range(len(self.layers) - 2, -1, -1):
+                a = activations[l]
+                dw = np.dot(a.T, delta)
+                db = np.sum(delta, axis=0, keepdims=True)
+                if l != 0:
+                    delta = np.dot(delta, self.weights[l].T) * self.sigmoid_derivative(activations[l])
+                self.weights[l] -= self.learning_rate * dw
+                self.biases[l] -= self.learning_rate * db
 
-        # plt.plot(error_hist, label="Error", marker="o", markersize=1)
-        plt.xlabel("Iteration")
-        plt.ylabel("Error")
-        plt.title("Iteration vs Error")
-        plt.legend()
-        plt.grid()
-        # plt.show()
+            if epoch % log_interval == 0 or epoch == 1:
+                print(f"Epoch {epoch}/{epochs}, Loss: {loss:.6f}")
 
     def predict(self, X):
-        predictions = dict()
-        for x in X:
-            prediction = self.forward(x)
-            predictions[tuple(x)] = prediction.item()
-
-        return predictions
-
-    def accuracy(self, X, Y):
-        return np.mean((self.predict(X) - Y) ** 2)
+        activations = self.forward(X)
+        return activations[-1]
 
 
+# Usage Example
 if __name__ == "__main__":
-    # plot()
-    data = get_data("f1")
-    X_train = data[0]
-    X_test = data[1]
-    Y_train = data[2]
-    Y_test = data[3]
+    # Define XOR dataset
+    X = np.array([
+        [0, 0],
+        [0, 1],
+        [1, 0],
+        [1, 1]
+    ])
+    y = np.array([
+        [0],
+        [1],
+        [1],
+        [0]
+    ])
 
-    # layers = [[2, 2, 1], [2, 4, 1], [2, 8, 1], [2, 8, 8, 1], [2, 16, 16, 1], [2, 32, 32, 1], [2, 64, 64, 1], [2, 120, 120, 1]]
-    #
-    # layer_error_dict = dict()
-    # for layer in tqdm(layers):
-    #     mlp = MultiLayerPerceptron(layer)
-    #     mlp.backprop(X=X_train, Y=Y_train)
-    #     error_test = mlp.error(X_test, Y_test)
-    #     layer_error_dict[str(layer)] = error_test
-    #
-    # layer_error_dict_sorted = dict(sorted(layer_error_dict.items(), key=lambda item: item[1]))
-    # print(f"Layer Error: {layer_error_dict_sorted}")
-    # # plot layer error dict
-    # plt.bar(layer_error_dict_sorted.keys(), layer_error_dict_sorted.values())
+    # Initialize MLP with [2,2,1], learning_rate=0.01, seed=42
+    mlp = MLP(layers=[2, 2, 1], learning_rate=0.01, seed=42)
 
+    # Train MLP
+    epochs = 50000
+    mlp.train(X, y, epochs)
 
-    # mlp = MultiLayerPerceptron([2, 8, 8, 8, 1])
-    # mlp.backprop(X=X_train, Y=Y_train)
-    # error_test = mlp.error(X_test, Y_test)
-    # prediction = mlp.predict(X_test)
-    # print(f"Predictions: {prediction}")
-    #
-    # # plot predictions vs actual
-    # fig = plt.figure()
-    # ax = fig.add_subplot(111, projection='3d')
-    # ax.scatter(X_test[:, 0], X_test[:, 1], Y_test, c='r', label='Actual')
-    # ax.scatter(X_test[:, 0], X_test[:, 1], list(prediction.values()), c='b', label='Predicted')
-    # plt.legend()
-    #plt.show()
+    # Make predictions
+    predictions = mlp.predict(X)
+    predictions_binary = (predictions > 0.5).astype(int)
 
-    # accuracy = mlp.accuracy(X_test, Y_test)
-    # print(f"Test Error: {error_test}")
-    # print(f"Test Accuracy: {accuracy}")
+    print("\nPredictions after training:")
+    for i, (input_sample, prediction) in enumerate(zip(X, predictions_binary)):
+        print(f"Input: {input_sample}, Predicted Output: {prediction[0]}, True Output: {y[i][0]}")
