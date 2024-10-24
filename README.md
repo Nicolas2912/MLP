@@ -2,6 +2,28 @@
 
 A simple implementation of a Multi-Layer Perceptron (MLP) neural network solving the XOR problem, with both C++ and Python implementations. The project demonstrates fundamental concepts of neural networks including forward propagation, backpropagation, and weight initialization using a Linear Congruential Generator (LCG) for reproducibility.
 
+## Table of Contents
+
+- [Features](#features)
+- [Project Structure](#project-structure)
+- [Implementation Details](#implementation-details)
+  - [Neural Network Architecture](#neural-network-architecture)
+  - [Key Components](#key-components)
+- [Usage](#usage)
+  - [C++ Implementation](#c-implementation)
+  - [Python Implementation](#python-implementation)
+  - [Example Output](#example-output)
+- [Technical Details](#technical-details)
+  - [LCG Implementation](#lcg-implementation)
+  - [Neural Network Implementation](#neural-network-implementation)
+- [Requirements](#requirements)
+  - [C++](#c)
+  - [Python](#python)
+- [Performance Considerations](#performance-considerations)
+- [License](#license)
+- [Contributing](#contributing)
+- [Acknowledgments](#acknowledgments)
+
 ## Features
 
 - Implementation in both C++ and Python for learning and comparison
